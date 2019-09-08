@@ -516,12 +516,12 @@ struct ethtool_ringparam {
 
 struct ethtool_channels {
 	__u32	cmd;
-	__u32	max_rx;
-	__u32	max_tx;
+	__u32	max_rx;//预设的rx队列数
+	__u32	max_tx;//预设的tx队列数
 	__u32	max_other;
 	__u32	max_combined;
-	__u32	rx_count;
-	__u32	tx_count;
+	__u32	rx_count;//当前rx队列数
+	__u32	tx_count;//当前tx队列数
 	__u32	other_count;
 	__u32	combined_count;
 };

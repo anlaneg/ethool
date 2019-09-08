@@ -155,7 +155,7 @@ struct off_flag_def {
 	 * Where the feature was supported before the flag was added,
 	 * it is the version that introduced the flag.
 	 */
-	u32 min_kernel_ver;
+	u32 min_kernel_ver;//最小支持此选项的kernel版本
 };
 static const struct off_flag_def off_flag_def[] = {
 	{ "rx",     "rx-checksumming",		    "rx-checksum",
@@ -1511,6 +1511,7 @@ static void dump_one_feature(const char *indent, const char *name,
 	if (ref_state &&
 	    !(FEATURE_BIT_IS_SET(state->features.features, index, active) ^
 	      FEATURE_BIT_IS_SET(ref_state->features.features, index, active)))
+		//跳过未使能的features,且ref_state中已包含的功能
 		return;
 
 	printf("%s%s: %s%s\n",
@@ -1520,14 +1521,15 @@ static void dump_one_feature(const char *indent, const char *name,
 	       (!FEATURE_BIT_IS_SET(state->features.features, index, available)
 		|| FEATURE_BIT_IS_SET(state->features.features, index,
 				      never_changed))
-	       ? " [fixed]"
+	       ? " [fixed]" //不容许变更
 	       : (FEATURE_BIT_IS_SET(state->features.features, index, requested)
 		  ^ FEATURE_BIT_IS_SET(state->features.features, index, active))
 	       ? (FEATURE_BIT_IS_SET(state->features.features, index, requested)
-		  ? " [requested on]" : " [requested off]")
+		  ? " [requested on]" : " [requested off]")//被请求要求on/off
 	       : "");
 }
 
+//取kernel版本
 static int linux_version_code(void)
 {
 	struct utsname utsname;
@@ -1558,6 +1560,7 @@ static void dump_features(const struct feature_defs *defs,
 		      kernel_ver < off_flag_def[i].min_kernel_ver) ||
 		     (off_flag_def[i].get_cmd == ETHTOOL_GUFO &&
 		      kernel_ver >= KERNEL_VERSION(4, 14, 0))))
+			//跳过kernel不支持的feature
 			continue;
 
 		value = off_flag_def[i].value;
@@ -1789,31 +1792,37 @@ get_stringset(struct cmd_context *ctx, enum ethtool_stringset set_id,
 {
 	struct {
 		struct ethtool_sset_info hdr;
-		u32 buf[1];
+		u32 buf[1];//set_id对应的元素数
 	} sset_info;
 	struct ethtool_drvinfo drvinfo;
 	u32 len, i;
 	struct ethtool_gstrings *strings;
 
+	//获取string set_id对应的集合元素数目
 	sset_info.hdr.cmd = ETHTOOL_GSSET_INFO;
 	sset_info.hdr.reserved = 0;
 	sset_info.hdr.sset_mask = 1ULL << set_id;
 	if (send_ioctl(ctx, &sset_info) == 0) {
+		//提取string set_id的元素数
 		len = sset_info.hdr.sset_mask ? sset_info.hdr.data[0] : 0;
 	} else if (errno == EOPNOTSUPP && drvinfo_offset != 0) {
 		/* Fallback for old kernel versions */
+		//如果提取失败，则获取驱协信息
 		drvinfo.cmd = ETHTOOL_GDRVINFO;
 		if (send_ioctl(ctx, &drvinfo))
 			return NULL;
 		len = *(u32 *)((char *)&drvinfo + drvinfo_offset);
 	} else {
+		//提取失败
 		return NULL;
 	}
 
+	//申请足量的string内存，存放此set
 	strings = calloc(1, sizeof(*strings) + len * ETH_GSTRING_LEN);
 	if (!strings)
 		return NULL;
 
+	//获取指定字符串集合的取值
 	strings->cmd = ETHTOOL_GSTRINGS;
 	strings->string_set = set_id;
 	strings->len = len;
@@ -1822,6 +1831,7 @@ get_stringset(struct cmd_context *ctx, enum ethtool_stringset set_id,
 		return NULL;
 	}
 
+	//返回kernel填充的sset字符串数组
 	if (null_terminate)
 		for (i = 0; i < len; i++)
 			strings->data[(i + 1) * ETH_GSTRING_LEN - 1] = 0;
@@ -1833,9 +1843,10 @@ static struct feature_defs *get_feature_defs(struct cmd_context *ctx)
 {
 	struct ethtool_gstrings *names;
 	struct feature_defs *defs;
-	u32 n_features;
+	u32 n_features;/*功能数量*/
 	int i, j;
 
+	//取ETH_SS_FEATURES对应的字符串集合
 	names = get_stringset(ctx, ETH_SS_FEATURES, 0, 1);
 	if (names) {
 		n_features = names->len;
@@ -1856,11 +1867,12 @@ static struct feature_defs *get_feature_defs(struct cmd_context *ctx)
 		return NULL;
 	}
 
-	defs->n_features = n_features;
+	defs->n_features = n_features;/*功能数量*/
 	memset(defs->off_flag_matched, 0, sizeof(defs->off_flag_matched));
 
 	/* Copy out feature names and find those associated with legacy flags */
 	for (i = 0; i < defs->n_features; i++) {
+		/*功能名*/
 		memcpy(defs->def[i].name, names->data + i * ETH_GSTRING_LEN,
 		       ETH_GSTRING_LEN);
 		defs->def[i].off_flag_index = -1;
@@ -1869,8 +1881,10 @@ static struct feature_defs *get_feature_defs(struct cmd_context *ctx)
 		     j < ARRAY_SIZE(off_flag_def) &&
 			     defs->def[i].off_flag_index < 0;
 		     j++) {
+			//取kernel名称
 			const char *pattern =
 				off_flag_def[j].kernel_name;
+			//取自kernel中获得的功能名
 			const char *name = defs->def[i].name;
 			for (;;) {
 				if (*pattern == '*') {
@@ -2141,6 +2155,7 @@ static int do_schannels(struct cmd_context *ctx)
 	return 0;
 }
 
+//查询设备支持的channel数量
 static int do_gchannels(struct cmd_context *ctx)
 {
 	struct ethtool_channels echannels;
@@ -2314,10 +2329,13 @@ get_features(struct cmd_context *ctx, const struct feature_defs *defs)
 
 	state->off_flags = 0;
 
+	//遍历off_flag_def中的字段
 	for (i = 0; i < ARRAY_SIZE(off_flag_def); i++) {
 		value = off_flag_def[i].value;
 		if (!off_flag_def[i].get_cmd)
+			//跳过没有get_cmd的功能
 			continue;
+		//向kernel发送命令，获取功能状态
 		eval.cmd = off_flag_def[i].get_cmd;
 		err = send_ioctl(ctx, &eval);
 		if (err) {
@@ -2325,10 +2343,12 @@ get_features(struct cmd_context *ctx, const struct feature_defs *defs)
 			    off_flag_def[i].get_cmd == ETHTOOL_GUFO)
 				continue;
 
+			//获取失败时，报错
 			fprintf(stderr,
 				"Cannot get device %s settings: %m\n",
 				off_flag_def[i].long_name);
 		} else {
+			//如果返回值非0，则offload标记中有此知
 			if (eval.data)
 				state->off_flags |= value;
 			allfail = 0;
@@ -2340,11 +2360,13 @@ get_features(struct cmd_context *ctx, const struct feature_defs *defs)
 	if (err) {
 		perror("Cannot get device flags");
 	} else {
+		//置rx vlan,tx vlan,rx hash等offload项为on
 		state->off_flags |= eval.data & ETH_FLAG_EXT_MASK;
 		allfail = 0;
 	}
 
 	if (defs->n_features) {
+		//获取一般功能状态
 		state->features.cmd = ETHTOOL_GFEATURES;
 		state->features.size = FEATURE_BITS_TO_BLOCKS(defs->n_features);
 		err = send_ioctl(ctx, &state->features);
@@ -2362,6 +2384,7 @@ get_features(struct cmd_context *ctx, const struct feature_defs *defs)
 	return state;
 }
 
+//显示设备支持的功能列表
 static int do_gfeatures(struct cmd_context *ctx)
 {
 	struct feature_defs *defs;
@@ -5197,6 +5220,7 @@ static int do_perqueue(struct cmd_context *ctx);
 int send_ioctl(struct cmd_context *ctx, void *cmd)
 {
 	ctx->ifr.ifr_data = cmd;
+	//发送ioctl
 	return ioctl(ctx->fd, SIOCETHTOOL, &ctx->ifr);
 }
 #endif
@@ -5431,12 +5455,14 @@ static int find_option(int argc, char **argp)
 		opt = args[k].opts;
 		for (;;) {
 			len = strcspn(opt, "|");
+			//短选项匹配且只有短选项
 			if (strncmp(*argp, opt, len) == 0 &&
 			    (*argp)[len] == 0)
 				return k;
 
 			if (opt[len] == 0)
 				break;
+			//尝试下一个先项
 			opt += len + 1;
 		}
 	}
@@ -5647,6 +5673,7 @@ int main(int argc, char **argp)
 	want_device = 1;
 
 opt_found:
+	//命令行要求设备名称的情况
 	if (want_device) {
 		ctx.devname = *argp++;
 		argc--;
@@ -5675,5 +5702,6 @@ opt_found:
 	ctx.argc = argc;
 	ctx.argp = argp;
 
+	//调用选项对应的函数
 	return func(&ctx);
 }
