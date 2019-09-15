@@ -2816,6 +2816,7 @@ do_ioctl_sset(struct cmd_context *ctx,
 	return send_ioctl(ctx, &ecmd);
 }
 
+//ethtool $devname命令行显示处理
 static int do_gset(struct cmd_context *ctx)
 {
 	int err;
@@ -2870,6 +2871,7 @@ static int do_gset(struct cmd_context *ctx)
 	edata.cmd = ETHTOOL_GLINK;
 	err = send_ioctl(ctx, &edata);
 	if (err == 0) {
+		//显示link层是否up
 		fprintf(stdout, "	Link detected: %s\n",
 			edata.data ? "yes":"no");
 		allfail = 0;
