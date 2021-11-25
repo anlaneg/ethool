@@ -47,7 +47,9 @@ cmd_sgso_off = { ETHTOOL_SGSO, 0 },
 cmd_sgso_on = { ETHTOOL_SGSO, 1 },
 cmd_ggro_off = { ETHTOOL_GGRO, 0 },
 cmd_ggro_on = { ETHTOOL_GGRO, 1 },
+/*set gro off对应命令*/
 cmd_sgro_off = { ETHTOOL_SGRO, 0 },
+/*开启gro对应命令*/
 cmd_sgro_on = { ETHTOOL_SGRO, 1 },
 cmd_gflags_off = { ETHTOOL_GFLAGS, 0 },
 cmd_gflags_on = { ETHTOOL_GFLAGS,

@@ -190,6 +190,7 @@ static inline int ethtool_link_mode_set_bit(unsigned int nr, u32 *mask)
 
 /* Context for sub-commands */
 struct cmd_context {
+    /*要操纵的设备名称*/
 	const char *devname;	/* net device name */
 	int fd;			/* socket suitable for ethtool ioctl */
 	struct ifreq ifr;	/* ifreq suitable for ethtool ioctl */

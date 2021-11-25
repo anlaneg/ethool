@@ -170,6 +170,7 @@ static const struct off_flag_def off_flag_def[] = {
 	  ETHTOOL_GUFO,	   ETHTOOL_SUFO,    ETH_FLAG_UFO,	0 },
 	{ "gso",    "generic-segmentation-offload", "tx-generic-segmentation",
 	  ETHTOOL_GGSO,	   ETHTOOL_SGSO,    ETH_FLAG_GSO,	0 },
+	  /*gro功能处理*/
 	{ "gro",    "generic-receive-offload",	    "rx-gro",
 	  ETHTOOL_GGRO,	   ETHTOOL_SGRO,    ETH_FLAG_GRO,	0 },
 	{ "lro",    "large-receive-offload",	    "rx-lro",
@@ -1843,7 +1844,8 @@ static struct feature_defs *get_feature_defs(struct cmd_context *ctx)
 {
 	struct ethtool_gstrings *names;
 	struct feature_defs *defs;
-	u32 n_features;/*功能数量*/
+	/*功能数量*/
+	u32 n_features;
 	int i, j;
 
 	//取ETH_SS_FEATURES对应的字符串集合
@@ -2081,16 +2083,19 @@ static int do_sring(struct cmd_context *ctx)
 	return 0;
 }
 
+//显示ring参数
 static int do_gring(struct cmd_context *ctx)
 {
 	struct ethtool_ringparam ering;
 	int err;
 
+	/*不能带参数*/
 	if (ctx->argc != 0)
 		exit_bad_args();
 
 	fprintf(stdout, "Ring parameters for %s:\n", ctx->devname);
 
+	//通过 gringparam获取ring的参数
 	ering.cmd = ETHTOOL_GRINGPARAM;
 	err = send_ioctl(ctx, &ering);
 	if (err == 0) {
@@ -3584,6 +3589,7 @@ static int do_gstats(struct cmd_context *ctx, int cmd, int stringset,
 	if (ctx->argc != 0)
 		exit_bad_args();
 
+	//取stringset集对应的所有成员
 	strings = get_stringset(ctx, stringset,
 				offsetof(struct ethtool_drvinfo, n_stats),
 				0);
@@ -3610,6 +3616,7 @@ static int do_gstats(struct cmd_context *ctx, int cmd, int stringset,
 
 	stats->cmd = cmd;
 	stats->n_stats = n_stats;
+	//通过ioctl获取统计信息
 	err = send_ioctl(ctx, stats);
 	if (err < 0) {
 		perror("Cannot get stats information");
@@ -3619,6 +3626,7 @@ static int do_gstats(struct cmd_context *ctx, int cmd, int stringset,
 	}
 
 	/* todo - pretty-print the strings per-driver */
+	//显示统计信息
 	fprintf(stdout, "%s statistics:\n", name);
 	for (i = 0; i < n_stats; i++) {
 		fprintf(stdout, "     %.*s: %llu\n",
@@ -3634,6 +3642,7 @@ static int do_gstats(struct cmd_context *ctx, int cmd, int stringset,
 
 static int do_gnicstats(struct cmd_context *ctx)
 {
+	//获取网卡统计信息
 	return do_gstats(ctx, ETHTOOL_GSTATS, ETH_SS_STATS, "NIC");
 }
 
@@ -3725,6 +3734,7 @@ static int do_grxclass(struct cmd_context *ctx)
 	struct ethtool_rxnfc nfccmd;
 	int err;
 
+	/*收到rx-flow-hash函数*/
 	if (ctx->argc > 0 && !strcmp(ctx->argp[0], "rx-flow-hash")) {
 		int rx_fhash_get;
 		bool flow_rss = false;
@@ -5220,7 +5230,7 @@ static int do_perqueue(struct cmd_context *ctx);
 int send_ioctl(struct cmd_context *ctx, void *cmd)
 {
 	ctx->ifr.ifr_data = cmd;
-	//发送ioctl
+	//发送ethtool的ioctl
 	return ioctl(ctx->fd, SIOCETHTOOL, &ctx->ifr);
 }
 #endif
@@ -5228,10 +5238,10 @@ int send_ioctl(struct cmd_context *ctx, void *cmd)
 static int show_usage(struct cmd_context *ctx);
 
 static const struct option {
-	const char *opts;
-	int want_device;
-	int (*func)(struct cmd_context *);
-	char *help;
+	const char *opts;/*选项短，长*/
+	int want_device;/*是否需要提供设备名称*/
+	int (*func)(struct cmd_context *);/*选项处理函数*/
+	char *help;/*帮助信息*/
 	char *opthelp;
 } args[] = {
 	{ "-s|--change", 1, do_sset, "Change generic options",
@@ -5275,17 +5285,21 @@ static const struct option {
 	  "		[tx-usecs-high N]\n"
 	  "		[tx-frames-high N]\n"
 	  "		[sample-interval N]\n" },
+	  //显示ring中rx,tx大小
 	{ "-g|--show-ring", 1, do_gring, "Query RX/TX ring parameters" },
 	{ "-G|--set-ring", 1, do_sring, "Set RX/TX ring parameters",
 	  "		[ rx N ]\n"
 	  "		[ rx-mini N ]\n"
 	  "		[ rx-jumbo N ]\n"
 	  "		[ tx N ]\n" },
+	  /*显示功能信息*/
 	{ "-k|--show-features|--show-offload", 1, do_gfeatures,
 	  "Get state of protocol offload and other features" },
+	  /*执行功能配置*/
 	{ "-K|--features|--offload", 1, do_sfeatures,
 	  "Set protocol offload and other features",
 	  "		FEATURE on|off ...\n" },
+	  //显示驱动信息
 	{ "-i|--driver", 1, do_gdrv, "Show driver information" },
 	{ "-d|--register-dump", 1, do_gregs, "Do a register dump",
 	  "		[ raw on|off ]\n"
@@ -5306,6 +5320,7 @@ static const struct option {
 	  "               [ TIME-IN-SECONDS ]\n" },
 	{ "-t|--test", 1, do_test, "Execute adapter self test",
 	  "               [ online | offline | external_lb ]\n" },
+	  //显示网卡状态
 	{ "-S|--statistics", 1, do_gnicstats, "Show adapter statistics" },
 	{ "--phy-statistics", 1, do_gphystats,
 	  "Show phy statistics" },
@@ -5659,6 +5674,7 @@ int main(int argc, char **argp)
 	if (argc == 0)
 		exit_bad_args();
 
+	/*按选项，确认采用哪个回调函数*/
 	k = find_option(argc, argp);
 	if (k >= 0) {
 		argp++;
@@ -5675,7 +5691,7 @@ int main(int argc, char **argp)
 opt_found:
 	//命令行要求设备名称的情况
 	if (want_device) {
-		ctx.devname = *argp++;
+		ctx.devname = *argp++;/*收集设备名称*/
 		argc--;
 
 		if (ctx.devname == NULL)
@@ -5684,6 +5700,7 @@ opt_found:
 			exit_bad_args();
 
 		/* Setup our control structures. */
+		/*填充设备名称*/
 		memset(&ctx.ifr, 0, sizeof(ctx.ifr));
 		strcpy(ctx.ifr.ifr_name, ctx.devname);
 
